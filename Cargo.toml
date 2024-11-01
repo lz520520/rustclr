@@ -1,6 +1,6 @@
 [package]
 name = "rustclr"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Host CLR and run .NET binaries using Rust"
 license = "MIT"
@@ -31,3 +31,7 @@ features = [
     "Win32_System_Diagnostics_Debug", 
     "Win32_System_SystemInformation",
 ]
+
+[package.metadata.docs.rs]
+default-target = "x86_64-pc-windows-msvc"
+targets = ["x86_64-pc-windows-gnu", "x86_64-pc-windows-msvc"]
