@@ -37,7 +37,7 @@ cargo add rustclr
 Or manually add the dependency:
 ```toml
 [dependencies]
-rustclr = "0.1.0"
+rustclr = "<version>"
 ```
 
 ## Usage
