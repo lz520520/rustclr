@@ -1,0 +1,33 @@
+[package]
+name = "rustclr"
+version = "0.1.0"
+edition = "2021"
+description = "Host CLR and run .NET binaries using Rust"
+license = "MIT"
+repository = "https://github.com/joaoviictorti/rustclr"
+homepage = "https://github.com/joaoviictorti/rustclr"
+readme = "README.md"
+keywords = ["dotnet", "clr", "windows", "rust", "redteam"]
+categories = ["os", "filesystem", "api-bindings"]
+exclude = [
+    ".gitignore",
+    "cli/",
+    "target/",
+    "tests/",
+]
+
+[dependencies]
+thiserror = "1.0.65"
+windows-core = "0.58.0"
+
+[dependencies.windows-sys]
+version = "0.59.0"
+features = [
+    "Win32_System_Com", 
+    "Win32_System_Ole", 
+    "Win32_System_Variant",
+    "Win32_System_LibraryLoader", 
+    "Win32_System_SystemServices", 
+    "Win32_System_Diagnostics_Debug", 
+    "Win32_System_SystemInformation",
+]
