@@ -14,7 +14,7 @@
 - [Installation](#installation)
 - [Usage](#usage)
   - [Running a .NET Assembly with Configured Flags](#running-a-net-assembly-with-configured-flags)
-  - [Advanced Configuration with RustClrEnv and ClrOutput](#advanced-configuration-with-rustclrenv-and-clroutput)
+  - [Configuration with RustClrEnv and ClrOutput](#advanced-configuration-with-rustclrenv-and-clroutput)
 - [Additional Resources](#additional-resources)
 - [CLI](#cli)
 - [Contributing to rustclr](#contributing-to-rustclr)
@@ -75,9 +75,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Advanced Configuration with RustClrEnv and ClrOutput
+### Configuration with RustClrEnv and ClrOutput
 
-For more fine-grained control, rustclr provides the RustClrEnv and ClrOutput components:
+For more fine-grained control, rustclr provides the `RustClrEnv` and `ClrOutput` components:
 
 - **`RustClrEnv`**: Allows for low-level customization and initialization of the .NET runtime environment, which is useful if you need to manually control the CLR version, MetaHost, runtime information, and application domain. This struct provides an alternative way to initialize a CLR environment without executing an assembly immediately.
 ```rs
