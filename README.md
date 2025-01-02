@@ -14,7 +14,7 @@
 - [Installation](#installation)
 - [Usage](#usage)
   - [Running a .NET Assembly with Configured Flags](#running-a-net-assembly-with-configured-flags)
-  - [Configuration with RustClrEnv and ClrOutput](#advanced-configuration-with-rustclrenv-and-clroutput)
+  - [Configuration with RustClrEnv and ClrOutput](#configuration-with-rustclrenv-and-clroutput)
 - [Additional Resources](#additional-resources)
 - [CLI](#cli)
 - [Contributing to rustclr](#contributing-to-rustclr)
