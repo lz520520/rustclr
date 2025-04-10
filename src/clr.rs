@@ -1,4 +1,4 @@
-use windows_core::{IUnknown, Interface, PCWSTR};
+use windows_core::{Interface, PCWSTR};
 use windows_sys::Win32::System::Variant::VARIANT;
 use crate::{WinStr, Invocation, error::ClrError, file::validate_file, create_safe_array_args};
 use crate::com::{
@@ -40,8 +40,8 @@ pub struct RustClr<'a> {
     runtime_info: Option<ICLRRuntimeInfo>,
     /// Host for the CLR runtime.
     cor_runtime_host: Option<ICorRuntimeHost>,
-    
-    
+
+
 }
 
 impl<'a> Default for RustClr<'a> {
@@ -516,7 +516,7 @@ impl<'a> ClrOutput<'a> {
         console.invoke("SetError", None, Some(vec![string_writer]), Invocation::Static)?;
 
         // console.invoke("WriteLine", None, Some(vec!["Hello World111".to_variant()]), Invocation::Static)?;
-        
+
         self.string_writer = Some(string_writer);
 
         Ok(())
