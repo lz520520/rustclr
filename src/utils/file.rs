@@ -11,7 +11,7 @@ use windows_sys::Win32::System::{
         IMAGE_NT_SIGNATURE
     }
 };
-
+use std::mem::size_of;
 /// Extracts the NT header from the given buffer if it represents a valid PE file.
 /// 
 /// # Arguments

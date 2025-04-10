@@ -181,6 +181,7 @@ impl Deref for _AppDomain {
     }
 }
 
+
 #[repr(C)]
 pub struct _AppDomainVtbl {
     /// Base vtable inherited from the `IUnknown` interface.

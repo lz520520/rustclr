@@ -1,12 +1,6 @@
-use windows_core::PCWSTR;
+use windows_core::{IUnknown, Interface, PCWSTR};
 use windows_sys::Win32::System::Variant::VARIANT;
-use crate::{
-    WinStr, 
-    Invocation,
-    error::ClrError, 
-    file::validate_file, 
-    create_safe_array_args,
-};
+use crate::{WinStr, Invocation, error::ClrError, file::validate_file, create_safe_array_args};
 use crate::com::{
     CLRCreateInstance, 
     CLSID_CLRMETAHOST, 
@@ -42,8 +36,12 @@ pub struct RustClr<'a> {
     /// Current application domain where the assembly is loaded.
     app_domain: Option<_AppDomain>,
 
+    meta_host: Option<ICLRMetaHost>,
+    runtime_info: Option<ICLRRuntimeInfo>,
     /// Host for the CLR runtime.
     cor_runtime_host: Option<ICorRuntimeHost>,
+    
+    
 }
 
 impl<'a> Default for RustClr<'a> {
@@ -60,6 +58,8 @@ impl<'a> Default for RustClr<'a> {
             domain_name: None,
             args: None, 
             app_domain: None,
+            meta_host: None,
+            runtime_info: None,
             cor_runtime_host: None
         }
     }
@@ -105,6 +105,8 @@ impl<'a> RustClr<'a> {
             domain_name: None, 
             args: None, 
             app_domain: None,
+            meta_host: None,
+            runtime_info: None,
             cor_runtime_host: None
         })
     }
@@ -201,8 +203,8 @@ impl<'a> RustClr<'a> {
     ///     Ok(())
     /// }
     /// ```
-    pub fn with_args(mut self, args: Vec<&str>) -> Self {
-        self.args = Some(args.iter().map(|&s| s.to_string()).collect());
+    pub fn with_args(mut self, args: Vec<String>) -> Self {
+        self.args = Some(args);
         self
     }
 
@@ -264,6 +266,8 @@ impl<'a> RustClr<'a> {
         self.init_app_domain(&cor_runtime_host)?;
 
         // Saves the runtime host for future use
+        self.meta_host = Some(meta_host);
+        self.runtime_info = Some(runtime_info);
         self.cor_runtime_host = Some(cor_runtime_host);
 
         Ok(())
@@ -445,7 +449,11 @@ impl<'a> RustClr<'a> {
 impl<'a> Drop for RustClr<'a> {
     fn drop(&mut self) {
         // Ends the CLR runtime
+
         if let Some(ref cor_runtime_host) = self.cor_runtime_host {
+            if let Some(ref app_domain) = self.app_domain {
+                let _ = cor_runtime_host.UnloadDomain(app_domain.as_raw() as *mut _);
+            }
             cor_runtime_host.Stop();
         }
     }
@@ -507,6 +515,8 @@ impl<'a> ClrOutput<'a> {
         console.invoke("SetOut", None, Some(vec![string_writer]), Invocation::Static)?;
         console.invoke("SetError", None, Some(vec![string_writer]), Invocation::Static)?;
 
+        // console.invoke("WriteLine", None, Some(vec!["Hello World111".to_variant()]), Invocation::Static)?;
+        
         self.string_writer = Some(string_writer);
 
         Ok(())

@@ -3,7 +3,7 @@ use rustclr::{
     Invocation, Variant,
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn sub() -> Result<(), Box<dyn std::error::Error>> {
     // Create and initialize the CLR environment
     let clr = RustClrEnv::new(None)?;
     let mscorlib = clr.app_domain.load_lib("mscorlib")?;
@@ -18,12 +18,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Invoke the WriteLine method
     console.invoke("WriteLine", None, Some(args), Invocation::Static)?;
+    console.invoke("WriteLine", None, Some(vec!["Hello World111".to_variant()]), Invocation::Static)?;
+
 
     // Restore the original output and capture redirected content
     clr_output.restore()?;
     let output = clr_output.capture()?;
 
-    print!("{output}");
+    print!("output: {output}");
+
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    for _i in 0..2 {
+        sub()?;
+    }
 
     Ok(())
 }

@@ -73,6 +73,7 @@ impl ICorRuntimeHost {
         unsafe { (Interface::vtable(self).Stop)(Interface::as_raw(self)) }
     }
 
+    
     /// Retrieves the default application domain for the runtime host.
     ///
     /// # Returns
@@ -518,7 +519,9 @@ pub struct ICorRuntimeHost_Vtbl {
     
     /// Stops the runtime host.
     pub Stop: unsafe extern "system" fn(*mut c_void) -> HRESULT,
-    
+
+    // pub Release: unsafe extern "system" fn(*mut c_void) -> HRESULT,
+
     /// Creates a new application domain.
     ///
     /// # Arguments

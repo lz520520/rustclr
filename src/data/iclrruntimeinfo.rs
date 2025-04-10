@@ -36,6 +36,8 @@ impl ICLRRuntimeInfo {
         
         self.IsStarted(&mut started, &mut startup_flags).is_ok() && started != 0
     }
+
+
 }
 
 /// Implementation of the original `ICLRRuntimeInfo` COM interface methods.

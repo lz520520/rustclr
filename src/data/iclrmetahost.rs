@@ -269,6 +269,8 @@ impl Deref for ICLRMetaHost {
     }
 }
 
+
+
 /// Vtable structure for the `ICLRMetaHost` interface, defining the available methods.
 ///
 /// These methods provide functionality such as retrieving runtime information, enumerating installed
