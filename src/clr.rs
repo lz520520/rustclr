@@ -455,18 +455,17 @@ impl<'a> RustClr<'a> {
     ///
     /// * `Ok(())` - If the AppDomain is unloaded or not present.
     /// * `Err(ClrError)` - If unloading the domain fails.
-    fn unload_domain(&self) -> Result<()> {
-        if let (Some(cor_runtime_host), Some(app_domain)) = (
-            &self.cor_runtime_host,
-            &self.app_domain,
-        ) {
-            // Attempt to unload the AppDomain, log error if it fails
-            cor_runtime_host.UnloadDomain(app_domain.cast::<windows_core::IUnknown>()
-                .map(|i| i.as_raw().cast())
-                .unwrap_or(null_mut())
-            )?
+    fn unload_domain(&mut self) -> Result<()> {
+        if let Some(cor_runtime_host) = &self.cor_runtime_host{
+            if let Some(app_domain) = self.app_domain.take(){
+                // Attempt to unload the AppDomain, log error if it fails
+                cor_runtime_host.UnloadDomain(app_domain.cast::<windows_core::IUnknown>()
+                    .map(|i| i.as_raw().cast())
+                    .unwrap_or(null_mut())
+                )?
+            }
+         
         }
-
         Ok(())
     }
 }
@@ -474,6 +473,7 @@ impl<'a> RustClr<'a> {
 /// Implements the `Drop` trait to release memory when `RustClr` goes out of scope.
 impl<'a> Drop for RustClr<'a> {
     fn drop(&mut self) {
+        let _ = self.unload_domain();
         if let Some(cor_runtime_host) = &self.cor_runtime_host {
             // Attempt to stop the CLR runtime
             cor_runtime_host.Stop();
