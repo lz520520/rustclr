@@ -172,6 +172,10 @@ impl<'a> RustClr<'a> {
         self.domain_name = Some(domain_name.to_string());
         self
     }
+    // get domain name
+    pub fn get_domain_name(&self) -> Option<String> {
+        self.domain_name.clone()
+    }
 
     /// Sets the arguments to pass to the .NET assembly's entry point.
     /// 
@@ -432,15 +436,8 @@ impl<'a> RustClr<'a> {
             let wide_domain_name = domain_name.encode_utf16().chain(Some(0)).collect::<Vec<u16>>();
             cor_runtime_host.CreateDomain(PCWSTR(wide_domain_name.as_ptr()), null_mut())?
         } else {
-            let uuid = uuid::Uuid::new_v4()
-                .to_string()
-                .encode_utf16()
-                .chain(Some(0))
-                .collect::<Vec<u16>>();
-
-            cor_runtime_host.CreateDomain(PCWSTR(uuid.as_ptr()), null_mut())?
+            cor_runtime_host.GetDefaultDomain()?
         };
-
         // Saves the created application domain
         self.app_domain = Some(app_domain);
 
@@ -455,7 +452,10 @@ impl<'a> RustClr<'a> {
     ///
     /// * `Ok(())` - If the AppDomain is unloaded or not present.
     /// * `Err(ClrError)` - If unloading the domain fails.
-    fn unload_domain(&mut self) -> Result<()> {
+    pub fn unload_domain(&mut self) -> Result<()> {
+        if self.domain_name.is_none() {
+            return Ok(())
+        }
         if let Some(cor_runtime_host) = &self.cor_runtime_host{
             if let Some(app_domain) = self.app_domain.take(){
                 // Attempt to unload the AppDomain, log error if it fails
@@ -464,7 +464,7 @@ impl<'a> RustClr<'a> {
                     .unwrap_or(null_mut())
                 )?
             }
-         
+        
         }
         Ok(())
     }
