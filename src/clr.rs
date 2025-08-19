@@ -11,7 +11,7 @@ use obfstr::obfstr as s;
 use dinvk::{
     NtCurrentProcess,
     NtProtectVirtualMemory,
-    data::NT_SUCCESS
+    NT_SUCCESS
 };
 use windows_core::{IUnknown, Interface, PCWSTR};
 use windows_sys::Win32::{

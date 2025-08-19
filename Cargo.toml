@@ -1,7 +1,7 @@
 [package]
 name = "rustclr"
 version = "0.3.1"
-edition = "2024"
+edition = "2021"
 license = "MIT"
 readme = "README.md"
 authors = ["João Victor"]
@@ -9,11 +9,11 @@ description = "Host CLR and run .NET binaries using Rust"
 repository = "https://github.com/joaoviictorti/rustclr"
 homepage = "https://github.com/joaoviictorti/rustclr"
 keywords = ["dotnet", "clr", "windows", "rust", "redteam"]
-categories = ["os", "security", "api-bindings"]
+categories = ["os", "api-bindings"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
-dinvk = "0.2.6"
+dinvk =  { git = "https://github.com/lz520520/dinvk"}
 obfstr = "0.4.4"
 thiserror = { version = "2.0.12", default-features = false }
 windows-core = { version = "0.61.2", default-features = false }
