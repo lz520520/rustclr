@@ -1,20 +1,17 @@
+use alloc::{string::String, vec::Vec};
 use windows_sys::Win32::Foundation::{SysAllocString, SysStringLen};
 
 /// Module related to safearray creation
 mod safearray;
 pub use safearray::*;
- 
+
 /// Module used to validate that the file corresponds to what is expected
 pub(crate) mod file;
 
 /// The `WinStr` trait provides methods for working with BSTRs (Binary String),
-/// a format commonly used in Windows API. BSTRs are wide strings (UTF-16) 
-/// with specific memory layouts, used for interoperation with COM 
+/// a format commonly used in Windows API. BSTRs are wide strings (UTF-16)
+/// with specific memory layouts, used for interoperation with COM
 /// (Component Object Model) and other Windows-based APIs.
-/// 
-/// The trait is implemented for `&str`, `String`, and `*const u16`, each with specific 
-/// behavior in converting to BSTR format. Additionally, the `*const u16` implementation 
-/// provides a `to_string` method for converting the BSTR back to a `String`.
 pub trait WinStr {
     /// Converts a Rust string into a BSTR.
     ///
@@ -38,7 +35,7 @@ pub trait WinStr {
     fn to_bstr(&self) -> *const u16;
 
     /// Converts a BSTR (pointer `*const u16`) back to a Rust `String`.
-    /// 
+    ///
     /// # Returns
     ///
     /// * `String` - A `String` containing the text from the BSTR if the trait
@@ -102,9 +99,24 @@ impl WinStr for *const u16 {
             return String::new();
         }
 
-        let slice = unsafe { std::slice::from_raw_parts(*self, len as usize) };
+        let slice = unsafe { core::slice::from_raw_parts(*self, len as usize) };
         String::from_utf16_lossy(slice)
     }
+}
+
+/// Generates a uuid used to create the AppDomain
+pub(crate) fn uuid() -> uuid::Uuid {
+    let mut buf = [0u8; 16];
+
+    for i in 0..4 {
+        let ticks = unsafe { core::arch::x86_64::_rdtsc() };
+        buf[i * 4] = ticks as u8;
+        buf[i * 4 + 1] = (ticks >> 8) as u8;
+        buf[i * 4 + 2] = (ticks >> 16) as u8;
+        buf[i * 4 + 3] = (ticks >> 24) as u8;
+    }
+
+    uuid::Uuid::from_bytes(buf)
 }
 
 /// Specifies the invocation type for a method, indicating if it is static or instance-based.

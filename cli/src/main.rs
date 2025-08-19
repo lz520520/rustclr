@@ -33,7 +33,7 @@ fn main() -> Result<(), ClrError> {
 
     // Read the .NET assembly file
     let data = fs::read(&cli.file)
-        .map_err(|_| ClrError::ErrorClr("Failed to read file"))?;
+        .map_err(|_| ClrError::GenericError("Failed to read file"))?;
 
     // Convert version string to RuntimeVersion enum
     let runtime_version = match cli.runtime_version.as_str() {
@@ -44,22 +44,22 @@ fn main() -> Result<(), ClrError> {
     };
 
     // Initialize and configure the RustClr instance
-    let mut clr = RustClr::new(&data)?
-        .with_runtime_version(runtime_version)
-        .with_output_redirection(true);
+    let mut clr = RustClr::new(data.as_slice())?
+        .runtime_version(runtime_version)
+        .output();
 
     // Set the custom application domain if provided
     if let Some(domain_name) = cli.domain {
-        clr = clr.with_domain(&domain_name);
+        clr = clr.domain(&domain_name);
     }
 
     // Set the string arguments for the .NET assembly if provided
     if let Some(inputs) = cli.inputs {
         // Convert Vec<String> to Vec<&str>
         let args = inputs.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
-        clr = clr.with_args(args);
+        clr = clr.args(args);
     } else {
-        clr = clr.with_args(vec![]);
+        clr = clr.args(vec![]);
     }
 
     // Run the .NET assembly

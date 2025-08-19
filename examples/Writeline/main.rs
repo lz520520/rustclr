@@ -1,5 +1,5 @@
 use rustclr::{
-    RustClrEnv, ClrOutput, 
+    RustClrEnv, ClrOutput,
     Invocation, Variant,
 };
 

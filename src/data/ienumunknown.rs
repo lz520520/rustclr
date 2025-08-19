@@ -1,14 +1,18 @@
-use crate::error::ClrError;
-use crate::Result;
-use windows_sys::core::HRESULT;
-use windows_core::{IUnknown, GUID, Interface};
-use std::{
-    ops::Deref, ptr::null_mut, 
-    ffi::c_void, mem::transmute
+use core::{
+    ffi::c_void, 
+    mem::transmute, 
+    ops::Deref, 
+    ptr::null_mut
 };
 
-/// Represents the COM `IEnumUnknown` interface, which enumerates interfaces 
-/// of type `IUnknown` in a sequence within the CLR environment.
+use windows_core::{GUID, IUnknown, Interface};
+use windows_sys::core::HRESULT;
+
+use crate::Result;
+use crate::error::ClrError;
+
+/// This struct represents the COM `IEnumUnknown` interface,
+/// a .NET assembly in the CLR environment.
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct IEnumUnknown(windows_core::IUnknown);
@@ -25,16 +29,20 @@ impl IEnumUnknown {
     /// * `pceltfetched` - An optional pointer that receives the number of elements fetched.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     #[inline]
-    pub fn Next(&self, rgelt: &mut [Option<windows_core::IUnknown>], pceltfetched: Option<*mut u32>) -> HRESULT {
+    pub fn Next(
+        &self,
+        rgelt: &mut [Option<windows_core::IUnknown>],
+        pceltfetched: Option<*mut u32>,
+    ) -> HRESULT {
         unsafe {
             (Interface::vtable(self).Next)(
-                Interface::as_raw(self), 
-                rgelt.len() as u32, 
-                transmute(rgelt.as_ptr()), 
-                transmute(pceltfetched.unwrap_or(core::ptr::null_mut()))
+                Interface::as_raw(self),
+                rgelt.len() as u32,
+                transmute(rgelt.as_ptr()),
+                transmute(pceltfetched.unwrap_or(core::ptr::null_mut())),
             )
         }
     }
@@ -57,7 +65,7 @@ impl IEnumUnknown {
             Err(ClrError::ApiError("Skip", hr))
         }
     }
-    
+
     /// Resets the enumeration sequence to the beginning.
     ///
     /// # Returns
@@ -95,19 +103,19 @@ unsafe impl Interface for IEnumUnknown {
 
     /// The interface identifier (IID) for the `IEnumUnknown` COM interface.
     ///
-    /// This GUID is used to identify the `IEnumUnknown` interface when calling 
-    /// COM methods like `QueryInterface`. It is defined based on the standard 
+    /// This GUID is used to identify the `IEnumUnknown` interface when calling
+    /// COM methods like `QueryInterface`. It is defined based on the standard
     /// .NET CLR IID for the `IEnumUnknown` interface.
     const IID: GUID = GUID::from_u128(0x00000100_0000_0000_c000_000000000046);
 }
 
 impl Deref for IEnumUnknown {
     type Target = windows_core::IUnknown;
-    
+
     /// Provides a reference to the underlying `IUnknown` interface.
     ///
-    /// This implementation allows `IEnumUnknown` to be used as an `IUnknown` 
-    /// pointer, enabling access to basic COM methods like `AddRef`, `Release`, 
+    /// This implementation allows `IEnumUnknown` to be used as an `IUnknown`
+    /// pointer, enabling access to basic COM methods like `AddRef`, `Release`,
     /// and `QueryInterface`.
     fn deref(&self) -> &Self::Target {
         unsafe { core::mem::transmute(self) }
@@ -117,7 +125,7 @@ impl Deref for IEnumUnknown {
 #[repr(C)]
 pub struct IEnumUnknown_Vtbl {
     /// Base vtable inherited from the `IUnknown` interface.
-    /// 
+    ///
     /// This field contains the basic methods for reference management,
     /// like `AddRef`, `Release`, and `QueryInterface`.
     pub base__: windows_core::IUnknown_Vtbl,
@@ -126,52 +134,56 @@ pub struct IEnumUnknown_Vtbl {
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `celt` - The number of elements to retrieve.
     /// * `rgelt` - Pointer to an array receiving the retrieved interfaces.
     /// * `pceltFetched` - Pointer to the actual number of elements retrieved.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub Next: unsafe extern "system" fn(
-        *mut c_void, 
-        celt: u32, 
-        rgelt: *mut *mut IUnknown, 
-        pceltFetched: *mut u32
+        this: *mut c_void,
+        celt: u32,
+        rgelt: *mut *mut IUnknown,
+        pceltFetched: *mut u32,
     ) -> HRESULT,
-    
+
     /// Skips the specified number of elements in the enumeration sequence.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `celt` - The number of elements to skip.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
-    pub Skip: unsafe extern "system" fn(
-        *mut c_void, 
-        celt: u32
-    ) -> HRESULT,
-    
+    pub Skip: unsafe extern "system" fn(this: *mut c_void, celt: u32) -> HRESULT,
+
     /// Resets the enumeration sequence to the beginning.
     ///
+    /// # Arguments
+    ///
+    /// * `this` - Pointer to the COM object.
+    ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
-    pub Reset: unsafe extern "system" fn(*mut c_void) -> HRESULT,
+    pub Reset: unsafe extern "system" fn(this: *mut c_void) -> HRESULT,
 
     /// Creates a new enumerator that contains the same state as the current one.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `ppenum` - Pointer to the new `IEnumUnknown`.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub Clone: unsafe extern "system" fn(
-        *mut c_void, 
+        this: *mut c_void, 
         ppenum: *mut *mut IEnumUnknown
     ) -> HRESULT,
 }

@@ -1,22 +1,17 @@
-use crate::error::ClrError;
-use crate::Result;
-use std::{
-    ffi::c_void, 
-    ops::Deref
-};
-use windows_core::{
-    Interface, GUID, 
-    PCSTR, PCWSTR, 
-    PWSTR
-};
+use alloc::ffi::CString;
+use core::{ffi::c_void, ops::Deref};
+
+use windows_core::{GUID, Interface, PCSTR, PCWSTR, PWSTR};
 use windows_sys::{
+    Win32::Foundation::{BOOL, HANDLE, HMODULE},
     core::HRESULT,
-    Win32::Foundation::{BOOL, HANDLE, HMODULE}
 };
 
-/// Represents the COM `ICLRRuntimeInfo` interface, which provides 
-/// information and functionalities for managing .NET runtime instances 
-/// within the CLR environment.
+use crate::Result;
+use crate::error::ClrError;
+
+/// This struct represents the COM `ICLRRuntimeInfo` interface,
+/// a .NET assembly in the CLR environment.
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct ICLRRuntimeInfo(windows_core::IUnknown);
@@ -26,7 +21,7 @@ pub struct ICLRRuntimeInfo(windows_core::IUnknown);
 /// These methods provide Rust-friendly wrappers around the original `ICLRRuntimeInfo` methods.
 impl ICLRRuntimeInfo {
     /// Checks if the CLR runtime has been started.
-    /// 
+    ///
     /// # Returns
     ///
     /// * `true` - If the runtime has been started (`started != 0`).
@@ -34,11 +29,9 @@ impl ICLRRuntimeInfo {
     pub fn is_started(&self) -> bool {
         let mut started = 0;
         let mut startup_flags = 0;
-        
+
         self.IsStarted(&mut started, &mut startup_flags).is_ok() && started != 0
     }
-
-
 }
 
 /// Implementation of the original `ICLRRuntimeInfo` COM interface methods.
@@ -79,7 +72,12 @@ impl ICLRRuntimeInfo {
     {
         unsafe {
             let mut result = core::ptr::null_mut();
-            let hr = (Interface::vtable(self).GetInterface)(Interface::as_raw(self), rclsid, &T::IID, &mut result);
+            let hr = (Interface::vtable(self).GetInterface)(
+                Interface::as_raw(self),
+                rclsid,
+                &T::IID,
+                &mut result,
+            );
             if hr == 0 {
                 Ok(core::mem::transmute_copy(&result))
             } else {
@@ -93,7 +91,7 @@ impl ICLRRuntimeInfo {
     /// # Arguments
     ///
     /// * `pwzbuffer` - A mutable `PWSTR` buffer for the version string.
-    /// * `pcchbuffer` - A pointer to an unsigned integer that specifies 
+    /// * `pcchbuffer` - A pointer to an unsigned integer that specifies
     ///   the buffer size and receives the actual length of the version string.
     ///
     /// # Returns
@@ -102,7 +100,11 @@ impl ICLRRuntimeInfo {
     /// * `Err(ClrError)` - If retrieval fails, returns a `ClrError`.
     pub fn GetVersionString(&self, pwzbuffer: PWSTR, pcchbuffer: *mut u32) -> Result<()> {
         unsafe {
-            let hr = (Interface::vtable(self).GetVersionString)(Interface::as_raw(self), pwzbuffer, pcchbuffer);
+            let hr = (Interface::vtable(self).GetVersionString)(
+                Interface::as_raw(self),
+                pwzbuffer,
+                pcchbuffer,
+            );
             if hr == 0 {
                 Ok(())
             } else {
@@ -124,7 +126,11 @@ impl ICLRRuntimeInfo {
     /// * `Err(ClrError)` - If retrieval fails, returns a `ClrError`.
     pub fn GetRuntimeDirectory(&self, pwzbuffer: PWSTR, pcchbuffer: *mut u32) -> Result<()> {
         unsafe {
-            let hr = (Interface::vtable(self).GetRuntimeDirectory)(Interface::as_raw(self), pwzbuffer, pcchbuffer);
+            let hr = (Interface::vtable(self).GetRuntimeDirectory)(
+                Interface::as_raw(self),
+                pwzbuffer,
+                pcchbuffer,
+            );
             if hr == 0 {
                 Ok(())
             } else {
@@ -146,7 +152,11 @@ impl ICLRRuntimeInfo {
     pub fn IsLoaded(&self, hndProcess: HANDLE) -> Result<BOOL> {
         unsafe {
             let mut pbLoaded = 0;
-            let hr = (Interface::vtable(self).IsLoaded)(Interface::as_raw(self), hndProcess, &mut pbLoaded);
+            let hr = (Interface::vtable(self).IsLoaded)(
+                Interface::as_raw(self),
+                hndProcess,
+                &mut pbLoaded,
+            );
             if hr == 0 {
                 Ok(pbLoaded)
             } else {
@@ -168,9 +178,21 @@ impl ICLRRuntimeInfo {
     ///
     /// * `Ok(())` - On success, the error string is written to `pwzBuffer`.
     /// * `Err(ClrError)` - If retrieval fails, returns a `ClrError`.
-    pub fn LoadErrorString(&self, iResourceID: u32, pwzBuffer: PWSTR, pcchBuffer: *mut u32, iLocaleID: i32) -> Result<()> {
+    pub fn LoadErrorString(
+        &self,
+        iResourceID: u32,
+        pwzBuffer: PWSTR,
+        pcchBuffer: *mut u32,
+        iLocaleID: i32,
+    ) -> Result<()> {
         unsafe {
-            let hr = (Interface::vtable(self).LoadErrorString)(Interface::as_raw(self), iResourceID, pwzBuffer, pcchBuffer, iLocaleID);
+            let hr = (Interface::vtable(self).LoadErrorString)(
+                Interface::as_raw(self),
+                iResourceID,
+                pwzBuffer,
+                pcchBuffer,
+                iLocaleID,
+            );
             if hr == 0 {
                 Ok(())
             } else {
@@ -191,8 +213,12 @@ impl ICLRRuntimeInfo {
     /// * `Err(ClrError)` - If loading fails, returns a `ClrError`.
     pub fn LoadLibraryA(&self, pwzDllName: PCWSTR) -> Result<HMODULE> {
         unsafe {
-            let mut result = std::mem::zeroed();
-            let hr = (Interface::vtable(self).LoadLibraryA)(Interface::as_raw(self), pwzDllName, &mut result);
+            let mut result = core::mem::zeroed();
+            let hr = (Interface::vtable(self).LoadLibraryA)(
+                Interface::as_raw(self),
+                pwzDllName,
+                &mut result,
+            );
             if hr == 0 {
                 Ok(result)
             } else {
@@ -211,10 +237,16 @@ impl ICLRRuntimeInfo {
     ///
     /// * `Ok(*mut c_void)` - On success, returns a pointer to the procedure.
     /// * `Err(ClrError)` - If retrieval fails, returns a `ClrError`.
-    pub fn GetProcAddress(&self, pszProcName: PCSTR) -> Result<*mut c_void> {
+    pub fn GetProcAddress(&self, pszProcName: &str) -> Result<*mut c_void> {
         unsafe {
-            let mut result = std::mem::zeroed();
-            let hr = (Interface::vtable(self).GetProcAddress)(Interface::as_raw(self), pszProcName, &mut result);
+            let mut result = core::mem::zeroed();
+            let cstr =
+                CString::new(pszProcName).map_err(|_| ClrError::GenericError("Invalid String"))?;
+            let hr = (Interface::vtable(self).GetProcAddress)(
+                Interface::as_raw(self),
+                PCSTR(cstr.as_ptr().cast()),
+                &mut result,
+            );
             if hr == 0 {
                 Ok(result)
             } else {
@@ -234,9 +266,17 @@ impl ICLRRuntimeInfo {
     ///
     /// * `Ok(())` - On success.
     /// * `Err(ClrError)` - If the operation fails, returns a `ClrError`.
-    pub fn SetDefaultStartupFlags(&self, dwstartupflags: u32, pwzhostconfigfile: PCWSTR) -> Result<()> {
+    pub fn SetDefaultStartupFlags(
+        &self,
+        dwstartupflags: u32,
+        pwzhostconfigfile: PCWSTR,
+    ) -> Result<()> {
         unsafe {
-            let hr = (Interface::vtable(self).SetDefaultStartupFlags)(Interface::as_raw(self), dwstartupflags, pwzhostconfigfile);
+            let hr = (Interface::vtable(self).SetDefaultStartupFlags)(
+                Interface::as_raw(self),
+                dwstartupflags,
+                pwzhostconfigfile,
+            );
             if hr == 0 {
                 Ok(())
             } else {
@@ -257,9 +297,19 @@ impl ICLRRuntimeInfo {
     ///
     /// * `Ok(())` - On success, the startup flags and file path are written to the respective parameters.
     /// * `Err(ClrError)` - If retrieval fails, returns a `ClrError`.
-    pub fn GetDefaultStartupFlags(&self, pdwstartupflags: *mut u32, pwzhostconfigfile: PWSTR, pcchhostconfigfile: *mut u32) -> Result<()> {
+    pub fn GetDefaultStartupFlags(
+        &self,
+        pdwstartupflags: *mut u32,
+        pwzhostconfigfile: PWSTR,
+        pcchhostconfigfile: *mut u32,
+    ) -> Result<()> {
         unsafe {
-            let hr = (Interface::vtable(self).GetDefaultStartupFlags)(Interface::as_raw(self), pdwstartupflags, core::mem::transmute(pwzhostconfigfile), pcchhostconfigfile);
+            let hr = (Interface::vtable(self).GetDefaultStartupFlags)(
+                Interface::as_raw(self),
+                pdwstartupflags,
+                core::mem::transmute(pwzhostconfigfile),
+                pcchhostconfigfile,
+            );
             if hr == 0 {
                 Ok(())
             } else {
@@ -298,7 +348,11 @@ impl ICLRRuntimeInfo {
     /// * `Err(ClrError)` - If the operation fails, returns a `ClrError`.
     pub fn IsStarted(&self, pbstarted: *mut BOOL, pdwstartupflags: *mut u32) -> Result<()> {
         unsafe {
-            let hr = (Interface::vtable(self).IsStarted)(Interface::as_raw(self), pbstarted, pdwstartupflags);
+            let hr = (Interface::vtable(self).IsStarted)(
+                Interface::as_raw(self),
+                pbstarted,
+                pdwstartupflags,
+            );
             if hr == 0 {
                 Ok(())
             } else {
@@ -313,8 +367,8 @@ unsafe impl Interface for ICLRRuntimeInfo {
 
     /// The interface identifier (IID) for the `ICLRRuntimeInfo` COM interface.
     ///
-    /// This GUID is used to identify the `ICLRRuntimeInfo` interface when calling 
-    /// COM methods like `QueryInterface`. It is defined based on the standard 
+    /// This GUID is used to identify the `ICLRRuntimeInfo` interface when calling
+    /// COM methods like `QueryInterface`. It is defined based on the standard
     /// .NET CLR IID for the `ICLRRuntimeInfo` interface.
     const IID: GUID = GUID::from_u128(0xbd39d1d2_ba2f_486a_89b0_b4b0cb466891);
 }
@@ -324,8 +378,8 @@ impl Deref for ICLRRuntimeInfo {
 
     /// The interface identifier (IID) for the `ICLRRuntimeInfo` COM interface.
     ///
-    /// This GUID is used to identify the `ICLRRuntimeInfo` interface when calling 
-    /// COM methods like `QueryInterface`. It is defined based on the standard 
+    /// This GUID is used to identify the `ICLRRuntimeInfo` interface when calling
+    /// COM methods like `QueryInterface`. It is defined based on the standard
     /// .NET CLR IID for the `ICLRRuntimeInfo` interface.
     fn deref(&self) -> &Self::Target {
         unsafe { core::mem::transmute(self) }
@@ -335,32 +389,34 @@ impl Deref for ICLRRuntimeInfo {
 #[repr(C)]
 pub struct ICLRRuntimeInfo_Vtbl {
     /// Base vtable inherited from the `IUnknown` interface.
-    /// 
+    ///
     /// This field contains the basic methods for reference management,
     /// like `AddRef`, `Release`, and `QueryInterface`.
     pub base__: windows_core::IUnknown_Vtbl,
-    
+
     /// Retrieves the version string of the CLR runtime.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `pwzBuffer` - A pointer to a buffer that receives the version string.
-    /// * `pcchBuffer` - A pointer to an unsigned integer that holds the buffer size and 
+    /// * `pcchBuffer` - A pointer to an unsigned integer that holds the buffer size and
     ///   receives the length of the version string on return.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub GetVersionString: unsafe extern "system" fn(
-        *mut c_void,
+        this: *mut c_void,
         pwzBuffer: PWSTR,
         pcchBuffer: *mut u32,
     ) -> HRESULT,
-    
+
     /// Retrieves the runtime directory path.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `pwzBuffer` - A pointer to a buffer for the directory path.
     /// * `pcchBuffer` - A pointer to an unsigned integer specifying the buffer size.
     ///
@@ -368,75 +424,79 @@ pub struct ICLRRuntimeInfo_Vtbl {
     ///
     /// * `HRESULT` indicating success or failure.
     pub GetRuntimeDirectory: unsafe extern "system" fn(
-        *mut c_void,
+        this: *mut c_void,
         pwzBuffer: PWSTR,
         pcchBuffer: *mut u32,
     ) -> HRESULT,
-    
+
     /// Checks if the runtime is loaded in a specified process.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `hndProcess` - A handle to the process.
     /// * `pbLoaded` - A pointer to a `BOOL` that receives the loaded status.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub IsLoaded: unsafe extern "system" fn(
-        *mut c_void, 
-        hndProcess: HANDLE, 
-        pbLoaded: *mut BOOL
+        this: *mut c_void,
+        hndProcess: HANDLE,
+        pbLoaded: *mut BOOL,
     ) -> HRESULT,
-    
+
     /// Loads a specified error message string.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `iResourceID` - The resource ID of the error message.
     /// * `pwzBuffer` - A buffer that receives the error message.
     /// * `pcchBuffer` - Pointer specifying the buffer size.
     /// * `iLocaleID` - The locale ID.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub LoadErrorString: unsafe extern "system" fn(
-        *mut c_void,
+        this: *mut c_void,
         iResourceID: u32,
         pwzBuffer: PWSTR,
         pcchBuffer: *mut u32,
         iLocaleID: i32,
     ) -> HRESULT,
-    
+
     /// Loads a specified DLL library.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `pwzDllName` - The name of the DLL to load.
     /// * `phndModule` - Pointer to a handle receiving the loaded module.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure..
     pub LoadLibraryA: unsafe extern "system" fn(
-        *mut c_void,
+        this: *mut c_void,
         pwzDllName: PCWSTR,
         phndModule: *mut HMODULE,
     ) -> HRESULT,
-    
+
     /// Retrieves a pointer to a specified procedure within a loaded module.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `pszProcName` - The name of the procedure.
     /// * `ppProc` - A pointer to a pointer receiving the procedure address.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub GetProcAddress: unsafe extern "system" fn(
-        *mut c_void,
+        this: *mut c_void,
         pszProcName: PCSTR,
         ppProc: *mut *mut c_void,
     ) -> HRESULT,
@@ -445,88 +505,94 @@ pub struct ICLRRuntimeInfo_Vtbl {
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `rclsid` - The class identifier for the interface.
     /// * `riid` - The identifier of the interface being requested.
     /// * `ppUnk` - A pointer to a pointer receiving the requested interface.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub GetInterface: unsafe extern "system" fn(
-        *mut c_void,
+        this: *mut c_void,
         rclsid: *const windows_core::GUID,
         riid: *const windows_core::GUID,
         ppUnk: *mut *mut c_void,
     ) -> HRESULT,
-    
+
     /// Checks if the runtime is loadable in the current process.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `pbLoadable` - A pointer to a `BOOL` receiving the loadable status.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
-    pub IsLoadable: unsafe extern "system" fn(
-        *mut c_void, 
-        pbLoadable: *mut BOOL
-    ) -> HRESULT,
-    
+    pub IsLoadable: unsafe extern "system" fn(this: *mut c_void, pbLoadable: *mut BOOL) -> HRESULT,
+
     /// Sets the default startup flags for the runtime.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `dwStartupFlags` - Flags defining runtime startup behavior.
     /// * `pwzHostConfigFile` - A configuration file path for the runtime.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub SetDefaultStartupFlags: unsafe extern "system" fn(
-        *mut c_void, 
-        dwStartupFlags: u32, 
-        pwzHostConfigFile: PCWSTR
+        this: *mut c_void,
+        dwStartupFlags: u32,
+        pwzHostConfigFile: PCWSTR,
     ) -> HRESULT,
-    
+
     /// Retrieves the default startup flags for the runtime.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `dwStartupFlags` - Pointer to receive the startup flags.
     /// * `pwzHostConfigFile` - Pointer to receive the configuration file path.
     /// * `pcchHostConfigFile` - Pointer to the size of the buffer for `pwzHostConfigFile`.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub GetDefaultStartupFlags: unsafe extern "system" fn(
-        *mut c_void,
+        this: *mut c_void,
         dwStartupFlags: *mut u32,
         pwzHostConfigFile: windows_core::PCWSTR,
         pcchHostConfigFile: *mut u32,
     ) -> HRESULT,
-    
+
     /// Binds the runtime as a legacy v2 runtime.
     ///
+    /// # Arguments
+    ///
+    /// * `this` - Pointer to the COM object.
+    ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
-    pub BindAsLegacyV2Runtime: unsafe extern "system" fn(*mut c_void) -> HRESULT,
-    
+    pub BindAsLegacyV2Runtime: unsafe extern "system" fn(this: *mut c_void) -> HRESULT,
+
     /// Checks if the runtime has started and retrieves startup flags.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `pbStarted` - A pointer receiving the started status.
     /// * `pdwStartupFlags` - A pointer receiving the startup flags.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub IsStarted: unsafe extern "system" fn(
-        *mut c_void, 
-        pbStarted: *mut BOOL, 
-        pdwStartupFlags: *mut u32
+        this: *mut c_void,
+        pbStarted: *mut BOOL,
+        pdwStartupFlags: *mut u32,
     ) -> HRESULT,
 }

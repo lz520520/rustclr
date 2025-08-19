@@ -1,29 +1,14 @@
-use std::{
-    ops::Deref,
-    ffi::c_void, 
-    ptr::null_mut, 
-    collections::HashMap
-};
+use alloc::{collections::BTreeMap, string::String, vec};
+use core::{ffi::c_void, ops::Deref, ptr::null_mut};
+
+use windows_core::{GUID, Interface, PCWSTR, PWSTR};
+use windows_sys::{Win32::Foundation::HANDLE, core::HRESULT};
+
+use super::{ICLRRuntimeInfo, IEnumUnknown};
 use crate::Result;
 use crate::error::ClrError;
-use super::{
-    ICLRRuntimeInfo, 
-    IEnumUnknown
-};
-use windows_core::{
-    IUnknown, GUID, 
-    PCWSTR, PWSTR, 
-    Interface
-};
-use windows_sys::{
-    core::HRESULT,
-    Win32::Foundation::HANDLE
-};
 
 /// Function pointer type for the callback invoked when a runtime is loaded.
-///
-/// This callback function is called when a runtime is loaded, and it receives the loaded runtime information
-/// along with functions to set and unset callback threads.
 ///
 /// # Arguments
 ///
@@ -39,16 +24,13 @@ pub type RuntimeLoadedCallbackFnPtr = Option<
 >;
 
 /// Function pointer for setting the callback thread in the CLR.
-/// This function returns an HRESULT indicating the success of the operation.
 pub type CallbackThreadSetFnPtr = Option<unsafe extern "system" fn() -> HRESULT>;
 
 /// Function pointer for unsetting the callback thread in the CLR.
-/// This function returns an HRESULT indicating the success of the operation.
 pub type CallbackThreadUnsetFnPtr = Option<unsafe extern "system" fn() -> HRESULT>;
 
-/// Structure representing the CLR MetaHost interface, which manages installed and loaded
-/// CLR runtimes on the system. This interface enables querying specific runtime versions
-/// and enumerating available runtimes.
+/// This struct represents the COM `ICLRMetaHoste` interface,
+/// a .NET assembly in the CLR environment.
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct ICLRMetaHost(windows_core::IUnknown);
@@ -61,26 +43,28 @@ impl ICLRMetaHost {
     ///
     /// # Returns
     ///
-    /// * `Ok(HashMap<String, ICLRRuntimeInfo>)` - A map where keys are runtime versions (as strings) and values
+    /// * `Ok(BTreeMap<String, ICLRRuntimeInfo>)` - A map where keys are runtime versions (as strings) and values
     ///   are `ICLRRuntimeInfo` instances with details about each runtime.
     /// * `Err(ClrError)` - Returns a `ClrError::CastingError` if casting to `ICLRRuntimeInfo` fails.
-    pub fn runtimes(&self) -> Result<HashMap<String, ICLRRuntimeInfo>> {
+    pub fn runtimes(&self) -> Result<BTreeMap<String, ICLRRuntimeInfo>> {
         let enum_unknown = self.EnumerateInstalledRuntimes()?;
         let mut fetched = 0;
-        let mut rgelt: [Option<IUnknown>; 1] = [None];
-        let mut runtimes: HashMap<String, ICLRRuntimeInfo> = HashMap::new();
-        
+        let mut rgelt = [None];
+        let mut runtimes = BTreeMap::new();
+
         while enum_unknown.Next(&mut rgelt, Some(&mut fetched)) == 0 && fetched > 0 {
             let runtime_info = match &rgelt[0] {
-                Some(unknown) => unknown.cast::<ICLRRuntimeInfo>().map_err(|_| ClrError::CastingError("ICLRRuntimeInfo"))?,
+                Some(unknown) => unknown
+                    .cast::<ICLRRuntimeInfo>()
+                    .map_err(|_| ClrError::CastingError("ICLRRuntimeInfo"))?,
                 None => continue,
             };
-            
+
             let mut version_string = vec![0u16; 256];
             let mut len = version_string.len() as u32;
             runtime_info.GetVersionString(PWSTR(version_string.as_mut_ptr()), &mut len)?;
             version_string.retain(|&c| c != 0);
-            
+
             let version = String::from_utf16_lossy(&version_string);
             runtimes.insert(version, runtime_info);
         }
@@ -110,7 +94,12 @@ impl ICLRMetaHost {
     {
         unsafe {
             let mut result = null_mut();
-            let hr = (Interface::vtable(self).GetRuntime)(Interface::as_raw(self), pwzversion, &T::IID, &mut result);
+            let hr = (Interface::vtable(self).GetRuntime)(
+                Interface::as_raw(self),
+                pwzversion,
+                &T::IID,
+                &mut result,
+            );
             if hr == 0 {
                 Ok(core::mem::transmute_copy(&result))
             } else {
@@ -127,13 +116,16 @@ impl ICLRMetaHost {
     /// * `Err(ClrError)` - Returns a `ClrError::ApiError` if enumeration fails.
     pub fn EnumerateInstalledRuntimes(&self) -> Result<IEnumUnknown> {
         unsafe {
-            let mut result = std::mem::zeroed();
-            let hr = (Interface::vtable(self).EnumerateInstalledRuntimes)(Interface::as_raw(self), &mut result);
+            let mut result = core::mem::zeroed();
+            let hr = (Interface::vtable(self).EnumerateInstalledRuntimes)(
+                Interface::as_raw(self),
+                &mut result,
+            );
             if hr == 0 {
                 Ok(IEnumUnknown::from_raw(result))
             } else {
                 Err(ClrError::ApiError("EnumerateInstalledRuntimes", hr))
-            }   
+            }
         }
     }
 
@@ -149,14 +141,24 @@ impl ICLRMetaHost {
     ///
     /// * `Ok(())` - On success, the version string is written to `pwzbuffer`.
     /// * `Err(ClrError)` - If the operation fails, returns a `ClrError`.
-    pub fn GetVersionFromFile(&self, pwzfilepath: PCWSTR, pwzbuffer: PWSTR, pcchbuffer: *mut u32) -> Result<()> {
+    pub fn GetVersionFromFile(
+        &self,
+        pwzfilepath: PCWSTR,
+        pwzbuffer: PWSTR,
+        pcchbuffer: *mut u32,
+    ) -> Result<()> {
         unsafe {
-            let hr = (Interface::vtable(self).GetVersionFromFile)(Interface::as_raw(self), pwzfilepath, pwzbuffer, pcchbuffer);
+            let hr = (Interface::vtable(self).GetVersionFromFile)(
+                Interface::as_raw(self),
+                pwzfilepath,
+                pwzbuffer,
+                pcchbuffer,
+            );
             if hr == 0 {
                 Ok(())
             } else {
                 Err(ClrError::ApiError("GetVersionFromFile", hr))
-            }   
+            }
         }
     }
 
@@ -172,13 +174,17 @@ impl ICLRMetaHost {
     /// * `Err(ClrError)` - If enumeration fails, returns a `ClrError`.
     pub fn EnumerateLoadedRuntimes(&self, hndprocess: HANDLE) -> Result<IEnumUnknown> {
         unsafe {
-            let mut result = std::mem::zeroed();
-            let hr = (Interface::vtable(self).EnumerateLoadedRuntimes)(Interface::as_raw(self), hndprocess, &mut result);
+            let mut result = core::mem::zeroed();
+            let hr = (Interface::vtable(self).EnumerateLoadedRuntimes)(
+                Interface::as_raw(self),
+                hndprocess,
+                &mut result,
+            );
             if hr == 0 {
                 Ok(IEnumUnknown::from_raw(result))
             } else {
                 Err(ClrError::ApiError("EnumerateLoadedRuntimes", hr))
-            }   
+            }
         }
     }
 
@@ -192,14 +198,20 @@ impl ICLRMetaHost {
     ///
     /// * `Ok(())` - On success, the callback is registered.
     /// * `Err(ClrError)` - If registration fails, returns a `ClrError`.
-    pub fn RequestRuntimeLoadedNotification(&self, pcallbackfunction: RuntimeLoadedCallbackFnPtr) -> Result<()> {
+    pub fn RequestRuntimeLoadedNotification(
+        &self,
+        pcallbackfunction: RuntimeLoadedCallbackFnPtr,
+    ) -> Result<()> {
         unsafe {
-            let hr = (Interface::vtable(self).RequestRuntimeLoadedNotification)(Interface::as_raw(self), pcallbackfunction);
+            let hr = (Interface::vtable(self).RequestRuntimeLoadedNotification)(
+                Interface::as_raw(self),
+                pcallbackfunction,
+            );
             if hr == 0 {
                 Ok(())
             } else {
                 Err(ClrError::ApiError("RequestRuntimeLoadedNotification", hr))
-            }   
+            }
         }
     }
 
@@ -215,7 +227,11 @@ impl ICLRMetaHost {
     {
         unsafe {
             let mut result = null_mut();
-            let hr = (Interface::vtable(self).QueryLegacyV2RuntimeBinding)(Interface::as_raw(self), &T::IID, &mut result);
+            let hr = (Interface::vtable(self).QueryLegacyV2RuntimeBinding)(
+                Interface::as_raw(self),
+                &T::IID,
+                &mut result,
+            );
             if hr == 0 {
                 Ok(core::mem::transmute_copy(&result))
             } else {
@@ -241,18 +257,18 @@ impl ICLRMetaHost {
                 Ok(())
             } else {
                 Err(ClrError::ApiError("ExitProcess", hr))
-            }   
+            }
         }
     }
 }
 
 unsafe impl Interface for ICLRMetaHost {
     type Vtable = ICLRMetaHost_Vtbl;
-    
+
     /// The interface identifier (IID) for the `ICLRMetaHost` COM interface.
     ///
-    /// This GUID is used to identify the `ICLRMetaHost` interface when calling 
-    /// COM methods like `QueryInterface`. It is defined based on the standard 
+    /// This GUID is used to identify the `ICLRMetaHost` interface when calling
+    /// COM methods like `QueryInterface`. It is defined based on the standard
     /// .NET CLR IID for the `ICLRMetaHost` interface.
     const IID: GUID = GUID::from_u128(0xd332db9e_b9b3_4125_8207_a14884f53216);
 }
@@ -262,8 +278,8 @@ impl Deref for ICLRMetaHost {
 
     /// Provides a reference to the underlying `IUnknown` interface.
     ///
-    /// This implementation allows `ICLRMetaHost` to be used as an `IUnknown` 
-    /// pointer, enabling access to basic COM methods like `AddRef`, `Release`, 
+    /// This implementation allows `ICLRMetaHost` to be used as an `IUnknown`
+    /// pointer, enabling access to basic COM methods like `AddRef`, `Release`,
     /// and `QueryInterface`.
     fn deref(&self) -> &Self::Target {
         unsafe { core::mem::transmute(self) }
@@ -279,7 +295,7 @@ impl Deref for ICLRMetaHost {
 #[repr(C)]
 pub struct ICLRMetaHost_Vtbl {
     /// Base vtable inherited from the `IUnknown` interface.
-    /// 
+    ///
     /// This field contains the basic methods for reference management,
     /// like `AddRef`, `Release`, and `QueryInterface`.
     pub base__: windows_core::IUnknown_Vtbl,
@@ -288,11 +304,12 @@ pub struct ICLRMetaHost_Vtbl {
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `pwzVersion` - Version of the runtime.
     /// * `riid` - GUID of the requested interface.
     /// * `ppRuntime` - Pointer to the interface.
     pub GetRuntime: unsafe extern "system" fn(
-        *mut c_void,
+        this: *mut c_void,
         pwzVersion: PCWSTR,
         riid: *const GUID,
         ppRuntime: *mut *mut c_void,
@@ -302,15 +319,16 @@ pub struct ICLRMetaHost_Vtbl {
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `pwzFilePath` - Path to the file.
     /// * `pwzBuffer` - Buffer for the version string.
     /// * `pcchBuffer` - Length of the buffer.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub GetVersionFromFile: unsafe extern "system" fn(
-        *mut c_void,
+        this: *mut c_void,
         pwzFilePath: PCWSTR,
         pwzBuffer: PWSTR,
         pcchBuffer: *mut u32,
@@ -320,13 +338,14 @@ pub struct ICLRMetaHost_Vtbl {
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `ppEnumerator` - Pointer to the enumerator.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub EnumerateInstalledRuntimes: unsafe extern "system" fn(
-        *mut c_void, 
+        this: *mut c_void, 
         ppEnumerator: *mut *mut c_void
     ) -> HRESULT,
 
@@ -334,44 +353,47 @@ pub struct ICLRMetaHost_Vtbl {
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `hndProcess` - Handle to the process.
     /// * `ppEnumerator` - Pointer to the enumerator.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub EnumerateLoadedRuntimes: unsafe extern "system" fn(
-        *mut c_void, 
-        hndProcess: HANDLE, 
-        ppEnumerator: *mut *mut c_void
+        this: *mut c_void,
+        hndProcess: HANDLE,
+        ppEnumerator: *mut *mut c_void,
     ) -> HRESULT,
 
     /// Registers a notification callback for when a runtime is loaded.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `pCallbackFunction` - Callback function to be invoked.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub RequestRuntimeLoadedNotification: unsafe extern "system" fn(
-        *mut c_void, 
-        pCallbackFunction: RuntimeLoadedCallbackFnPtr
+        this: *mut c_void,
+        pCallbackFunction: RuntimeLoadedCallbackFnPtr,
     ) -> HRESULT,
 
     /// Queries for a legacy runtime binding.
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `riid` - GUID of the legacy runtime binding.
     /// * `ppUnk` - Pointer to the resulting binding.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     pub QueryLegacyV2RuntimeBinding: unsafe extern "system" fn(
-        *mut c_void,
+        this: *mut c_void,
         riid: *const GUID,
         ppUnk: *mut *mut c_void,
     ) -> HRESULT,
@@ -380,10 +402,11 @@ pub struct ICLRMetaHost_Vtbl {
     ///
     /// # Arguments
     ///
+    /// * `this` - Pointer to the COM object.
     /// * `iExitCode` - Exit code.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
-    pub ExitProcess: unsafe extern "system" fn(*mut c_void, iExitCode: i32) -> HRESULT,
+    pub ExitProcess: unsafe extern "system" fn(this: *mut c_void, iExitCode: i32) -> HRESULT,
 }

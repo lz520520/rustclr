@@ -1,31 +1,32 @@
-use std::{
-    ffi::c_void, 
-    ptr::{null_mut, null}, 
-    ops::{BitOr, Deref}
+use alloc::{string::String, vec::Vec};
+use core::{
+    ffi::c_void,
+    ops::{BitOr, Deref},
+    ptr::{null, null_mut},
 };
-use crate::{
-    error::ClrError, 
-    data::_MethodInfo,
-    WinStr, Invocation,
-    create_safe_args, Result
-};
-use windows_core::{IUnknown, Interface, GUID};
+
+use windows_core::{GUID, IUnknown, Interface};
 use windows_sys::{
-    core::{BSTR, HRESULT}, 
+    core::{BSTR, HRESULT},
     Win32::System::{
-        Com::SAFEARRAY, 
+        Com::SAFEARRAY,
         Variant::VARIANT,
         Ole::{
             SafeArrayGetElement, 
             SafeArrayGetLBound, 
             SafeArrayGetUBound
-        }, 
-    }
+        },
+    },
 };
 
-/// Represents the `_Type` COM interface, allowing for the invocation of
-/// methods, retrieval of properties, and interaction with .NET types
-/// within the CLR environment.
+use crate::{
+    Invocation, Result, WinStr, create_safe_args,
+    data::{_MethodInfo, _PropertyInfo},
+    error::ClrError,
+};
+
+/// This struct represents the COM `_Type` interface,
+/// a .NET assembly in the CLR environment.
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct _Type(windows_core::IUnknown);
@@ -72,6 +73,64 @@ impl _Type {
         Err(ClrError::MethodNotFound)
     }
 
+    /// Finds a property by signature from the type.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - A string slice representing the property signature.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(_PropertyInfo)` - On success, returns the matching `_PropertyInfo`.
+    /// * `Err(ClrError)` - On failure, returns `ClrError::PropertyNotFound`.
+    pub fn property_signature(&self, name: &str) -> Result<_PropertyInfo> {
+        let properties = self.properties();
+        if let Ok(properties) = properties {
+            for (property_name, property_info) in properties {
+                if property_name == name {
+                    return Ok(property_info);
+                }
+            }
+        }
+
+        Err(ClrError::PropertyNotFound)
+    }
+
+    /// Retrieves a property by name from the type.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - A string slice representing the property name.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(_PropertyInfo)` - On success, returns the COM pointer to the property.
+    /// * `Err(ClrError)` - On failure, returns a `ClrError`.
+    pub fn property(&self, name: &str) -> Result<_PropertyInfo> {
+        unsafe {
+            let binding_flags = BindingFlags::Public
+                | BindingFlags::Instance
+                | BindingFlags::Static
+                | BindingFlags::FlattenHierarchy
+                | BindingFlags::NonPublic;
+
+            let property_name = name.to_bstr();
+            let mut result = null_mut();
+            let hr = (Interface::vtable(self).GetProperty)(
+                Interface::as_raw(self),
+                property_name,
+                binding_flags,
+                &mut result,
+            );
+
+            if hr == 0 && !result.is_null() {
+                Ok(_PropertyInfo::from_raw(result)?)
+            } else {
+                Err(ClrError::ApiError("GetProperty", hr))
+            }
+        }
+    }
+
     /// Invokes a method on the type.
     ///
     /// # Arguments
@@ -86,24 +145,33 @@ impl _Type {
     /// * `Ok(VARIANT)` - On success, returns the result as `VARIANT`.
     /// * `Err(ClrError)` - On failure, returns `ClrError`.
     pub fn invoke(
-        &self, 
-        name: &str, 
-        instance: Option<VARIANT>, 
-        args: Option<Vec<VARIANT>>, 
-        invocation_type: Invocation
+        &self,
+        name: &str,
+        instance: Option<VARIANT>,
+        args: Option<Vec<VARIANT>>,
+        invocation_type: Invocation,
     ) -> Result<VARIANT> {
         let flags = match invocation_type {
-            Invocation::Static => BindingFlags::NonPublic | BindingFlags::Public | BindingFlags::Static | BindingFlags::InvokeMethod,
-            Invocation::Instance => BindingFlags::NonPublic | BindingFlags::Public | BindingFlags::Instance | BindingFlags::InvokeMethod,
+            Invocation::Static => {
+                BindingFlags::NonPublic
+                    | BindingFlags::Public
+                    | BindingFlags::Static
+                    | BindingFlags::InvokeMethod
+            }
+            Invocation::Instance => {
+                BindingFlags::NonPublic
+                    | BindingFlags::Public
+                    | BindingFlags::Instance
+                    | BindingFlags::InvokeMethod
+            }
         };
 
         let method_name = name.to_bstr();
-        let args = args.as_ref().map_or_else(
-            || Ok(null_mut()),
-            |args| create_safe_args(args.to_vec())
-        )?;
+        let args = args
+            .as_ref()
+            .map_or_else(|| Ok(null_mut()), |args| create_safe_args(args.to_vec()))?;
 
-        let instance = instance.unwrap_or(unsafe { std::mem::zeroed::<VARIANT>() });
+        let instance = instance.unwrap_or(unsafe { core::mem::zeroed::<VARIANT>() });
         self.InvokeMember_3(method_name, flags, instance, args)
     }
 
@@ -114,9 +182,12 @@ impl _Type {
     /// * `Ok(Vec<(String, _MethodInfo)>)` - On success, returns a vector of method names and `_MethodInfo`.
     /// * `Err(ClrError)` - On failure, returns a `ClrError`.
     pub fn methods(&self) -> Result<Vec<(String, _MethodInfo)>> {
-        let binding_flags = BindingFlags::Public | BindingFlags::Instance |
-            BindingFlags::Static | BindingFlags::FlattenHierarchy | BindingFlags::NonPublic;
-        
+        let binding_flags = BindingFlags::Public
+            | BindingFlags::Instance
+            | BindingFlags::Static
+            | BindingFlags::FlattenHierarchy
+            | BindingFlags::NonPublic;
+
         let sa_methods = self.GetMethods(binding_flags)?;
         if sa_methods.is_null() {
             return Err(ClrError::NullPointerError("GetMethods"));
@@ -128,7 +199,7 @@ impl _Type {
         unsafe {
             SafeArrayGetLBound(sa_methods, 1, &mut lbound);
             SafeArrayGetUBound(sa_methods, 1, &mut ubound);
-            
+
             let mut p_method = null_mut::<_MethodInfo>();
             for i in lbound..=ubound {
                 let hr = SafeArrayGetElement(sa_methods, &i, &mut p_method as *mut _ as *mut _);
@@ -145,6 +216,48 @@ impl _Type {
         Ok(methods)
     }
 
+    /// Retrieves all properties of the type.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Vec<(String, _PropertyInfo)>)` - On success, returns a vector of property names and `_PropertyInfo`.
+    /// * `Err(ClrError)` - On failure, returns a `ClrError`.
+    pub fn properties(&self) -> Result<Vec<(String, _PropertyInfo)>> {
+        let binding_flags = BindingFlags::Public
+            | BindingFlags::Instance
+            | BindingFlags::Static
+            | BindingFlags::FlattenHierarchy
+            | BindingFlags::NonPublic;
+
+        let sa_properties = self.GetProperties(binding_flags)?;
+        if sa_properties.is_null() {
+            return Err(ClrError::NullPointerError("GetProperties"));
+        }
+
+        let mut lbound = 0;
+        let mut ubound = 0;
+        let mut properties = Vec::new();
+        unsafe {
+            SafeArrayGetLBound(sa_properties, 1, &mut lbound);
+            SafeArrayGetUBound(sa_properties, 1, &mut ubound);
+
+            let mut p_property = null_mut::<_PropertyInfo>();
+            for i in lbound..=ubound {
+                let hr =
+                    SafeArrayGetElement(sa_properties, &i, &mut p_property as *mut _ as *mut _);
+                if hr != 0 || p_property.is_null() {
+                    return Err(ClrError::ApiError("SafeArrayGetElement", hr));
+                }
+
+                let property = _PropertyInfo::from_raw(p_property as *mut c_void)?;
+                let name = property.ToString()?;
+                properties.push((name, property));
+            }
+        }
+
+        Ok(properties)
+    }
+
     /// Creates an `_Type` instance from a raw COM interface pointer.
     ///
     /// # Arguments
@@ -158,7 +271,9 @@ impl _Type {
     #[inline(always)]
     pub fn from_raw(raw: *mut c_void) -> Result<_Type> {
         let iunknown = unsafe { IUnknown::from_raw(raw) };
-        iunknown.cast::<_Type>().map_err(|_| ClrError::CastingError("_Type"))
+        iunknown
+            .cast::<_Type>()
+            .map_err(|_| ClrError::CastingError("_Type"))
     }
 }
 
@@ -174,20 +289,45 @@ impl _Type {
     /// * `Err(ClrError)` - On failure, returns a `ClrError`.
     pub fn ToString(&self) -> Result<String> {
         unsafe {
-            let mut result= null::<u16>();
+            let mut result = null::<u16>();
             let hr = (Interface::vtable(self).get_ToString)(Interface::as_raw(self), &mut result);
             if hr == 0 {
                 let mut len = 0;
                 while *result.add(len) != 0 {
                     len += 1;
                 }
-    
-                let slice = std::slice::from_raw_parts(result, len);
-                let entrypoint = String::from_utf16_lossy(slice);
 
-                Ok(entrypoint)
+                let slice = core::slice::from_raw_parts(result, len);
+                Ok(String::from_utf16_lossy(slice))
             } else {
                 Err(ClrError::ApiError("ToString", hr))
+            }
+        }
+    }
+
+    /// Retrieves all properties matching the specified `BindingFlags`.
+    ///
+    /// # Arguments
+    ///
+    /// * `bindingAttr` - The `BindingFlags` to filter which properties to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(*mut SAFEARRAY)` - On success, returns pointer to SAFEARRAY of properties.
+    /// * `Err(ClrError)` - On failure, returns a `ClrError`.
+    pub fn GetProperties(&self, bindingAttr: BindingFlags) -> Result<*mut SAFEARRAY> {
+        unsafe {
+            let mut result = null_mut();
+            let hr = (Interface::vtable(self).GetProperties)(
+                Interface::as_raw(self),
+                bindingAttr,
+                &mut result,
+            );
+
+            if hr == 0 {
+                Ok(result)
+            } else {
+                Err(ClrError::ApiError("GetProperties", hr))
             }
         }
     }
@@ -205,7 +345,11 @@ impl _Type {
     pub fn GetMethods(&self, bindingAttr: BindingFlags) -> Result<*mut SAFEARRAY> {
         unsafe {
             let mut result = null_mut();
-            let hr = (Interface::vtable(self).GetMethods)(Interface::as_raw(self), bindingAttr, &mut result);
+            let hr = (Interface::vtable(self).GetMethods)(
+                Interface::as_raw(self),
+                bindingAttr,
+                &mut result,
+            );
             if hr == 0 {
                 Ok(result)
             } else {
@@ -223,10 +367,10 @@ impl _Type {
     /// # Returns
     ///
     /// * `Ok(_MethodInfo)` - On success, returns the `_MethodInfo` for the method.
-    /// * `Err(ClrError)` - On failure, returns a `ClrError`. 
+    /// * `Err(ClrError)` - On failure, returns a `ClrError`.
     pub fn GetMethod_6(&self, name: BSTR) -> Result<_MethodInfo> {
         unsafe {
-            let mut result = std::mem::zeroed();
+            let mut result = core::mem::zeroed();
             let hr = (Interface::vtable(self).GetMethod_6)(Interface::as_raw(self), name, &mut result);
             if hr == 0 {
                 _MethodInfo::from_raw(result as *mut c_void)
@@ -251,10 +395,24 @@ impl _Type {
     ///
     /// * `Ok(VARIANT)` - On success, returns the result of the invocation as a `VARIANT`.
     /// * `Err(ClrError)` - If invocation fails, returns an appropriate `ClrError`.
-    pub fn InvokeMember_3(&self, name: BSTR, invoke_attr: BindingFlags, instance: VARIANT, args: *mut SAFEARRAY) -> Result<VARIANT> {
+    pub fn InvokeMember_3(
+        &self,
+        name: BSTR,
+        invoke_attr: BindingFlags,
+        instance: VARIANT,
+        args: *mut SAFEARRAY,
+    ) -> Result<VARIANT> {
         unsafe {
-            let mut result = std::mem::zeroed();
-            let hr = (Interface::vtable(self).InvokeMember_3)(Interface::as_raw(self), name, invoke_attr, null_mut(), instance, args, &mut result);
+            let mut result = core::mem::zeroed();
+            let hr = (Interface::vtable(self).InvokeMember_3)(
+                Interface::as_raw(self),
+                name,
+                invoke_attr,
+                null_mut(),
+                instance,
+                args,
+                &mut result,
+            );
             if hr == 0 {
                 Ok(result)
             } else {
@@ -269,8 +427,8 @@ unsafe impl Interface for _Type {
 
     /// The interface identifier (IID) for the `_Type` COM interface.
     ///
-    /// This GUID is used to identify the `_Type` interface when calling 
-    /// COM methods like `QueryInterface`. It is defined based on the standard 
+    /// This GUID is used to identify the `_Type` interface when calling
+    /// COM methods like `QueryInterface`. It is defined based on the standard
     /// .NET CLR IID for the `_Type` interface.
     const IID: GUID = GUID::from_u128(0xbca8b44d_aad6_3a86_8ab7_03349f4f2da2);
 }
@@ -280,8 +438,8 @@ impl Deref for _Type {
 
     /// Provides a reference to the underlying `IUnknown` interface.
     ///
-    /// This implementation allows `_Type` to be used as an `_Type` 
-    /// pointer, enabling access to basic COM methods like `AddRef`, `Release`, 
+    /// This implementation allows `_Type` to be used as an `_Type`
+    /// pointer, enabling access to basic COM methods like `AddRef`, `Release`,
     /// and `QueryInterface`.
     fn deref(&self) -> &Self::Target {
         unsafe { core::mem::transmute(self) }
@@ -291,7 +449,7 @@ impl Deref for _Type {
 #[repr(C)]
 pub struct _Type_Vtbl {
     /// Base vtable inherited from the `IUnknown` interface.
-    /// 
+    ///
     /// This field contains the basic methods for reference management,
     /// like `AddRef`, `Release`, and `QueryInterface`.
     pub base__: windows_core::IUnknown_Vtbl,
@@ -305,17 +463,14 @@ pub struct _Type_Vtbl {
     /// Retrieves the string representation of the Method.
     ///
     /// # Arguments
-    /// 
-    /// * `*mut c_void` - Pointer to the COM object implementing the interface.
+    ///
+    /// * `this` - Pointer to the COM object.
     /// * `pRetVal` - Pointer to a `BSTR` that receives the string result.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
-    get_ToString: unsafe extern "system" fn(
-        *mut c_void,
-        pRetVal: *mut BSTR
-    ) -> HRESULT,
+    get_ToString: unsafe extern "system" fn(this: *mut c_void, pRetVal: *mut BSTR) -> HRESULT,
 
     /// Placeholder for the methods. Not used directly.
     Equals: *const c_void,
@@ -360,26 +515,62 @@ pub struct _Type_Vtbl {
     /// Retrieves methods matching the specified `BindingFlags`.
     ///
     /// # Arguments
-    /// 
-    /// * `*mut c_void` - Pointer to the COM object implementing the interface.
+    ///
+    /// * `this` - Pointer to the COM object.
     /// * `bindingAttr` - The `BindingFlags` specifying the methods to retrieve.
     /// * `pRetVal` - A pointer to a `SAFEARRAY` that receives the retrieved methods.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     GetMethods: unsafe extern "system" fn(
-        *mut c_void, 
-        bindingAttr: BindingFlags, 
-        pRetVal: *mut *mut SAFEARRAY
+        this: *mut c_void,
+        bindingAttr: BindingFlags,
+        pRetVal: *mut *mut SAFEARRAY,
     ) -> HRESULT,
 
     /// Placeholder for the methods. Not used directly.
     GetField: *const c_void,
     GetFields: *const c_void,
-    GetProperty: *const c_void,
+
+    /// Retrieves a property by name.
+    ///
+    /// # Arguments
+    ///
+    /// * `this` - Pointer to the COM object.
+    /// * `name` - The property name.
+    /// * `result` - Output pointer receiving the IPropertyInfo.
+    ///
+    /// # Returns
+    ///
+    /// * HRESULT indicating success or failure.
+    pub GetProperty: unsafe extern "system" fn(
+        this: *mut c_void,
+        name: BSTR,
+        bindingAttr: BindingFlags,
+        result: *mut *mut c_void,
+    ) -> HRESULT,
+
+    /// Placeholder for the methods. Not used directly.
     GetProperty_2: *const c_void,
-    GetProperties: *const c_void,
+
+    /// Retrieves properties matching the specified `BindingFlags`.
+    ///
+    /// # Arguments
+    ///
+    /// * `this` - Pointer to the COM object.
+    /// * `bindingAttr` - The `BindingFlags` specifying the properties to retrieve.
+    /// * `pRetVal` - A pointer to a `SAFEARRAY` that receives the retrieved properties.
+    ///
+    /// # Returns
+    ///
+    /// * Returns an HRESULT indicating success or failure.
+    GetProperties: unsafe extern "system" fn(
+        this: *mut c_void,
+        bindingAttr: BindingFlags,
+        pRetVal: *mut *mut SAFEARRAY,
+    ) -> HRESULT,
+
     GetMember_2: *const c_void,
     GetMembers: *const c_void,
     InvokeMember: *const c_void,
@@ -389,8 +580,8 @@ pub struct _Type_Vtbl {
     /// Invokes a method (static or instance) by name on the specified type or object.
     ///
     /// # Arguments
-    /// 
-    /// * `*mut c_void` - Pointer to the COM object implementing the interface.
+    ///
+    /// * `this` - Pointer to the COM object.
     /// * `name` - The name of the member to invoke as a `BSTR`.
     /// * `invokeAttr` - Flags controlling invocation behavior.
     /// * `Binder` - Pointer to binder; typically `null`.
@@ -399,16 +590,16 @@ pub struct _Type_Vtbl {
     /// * `pRetVal` - Pointer to receive the invocation result.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     InvokeMember_3: unsafe extern "system" fn(
-        *mut c_void, 
-        name: BSTR, 
-        invokeAttr: BindingFlags, 
-        Binder: *mut c_void, 
+        this: *mut c_void,
+        name: BSTR,
+        invokeAttr: BindingFlags,
+        Binder: *mut c_void,
         Target: VARIANT,
         args: *mut SAFEARRAY,
-        pRetVal: *mut VARIANT
+        pRetVal: *mut VARIANT,
     ) -> HRESULT,
 
     /// Placeholder for the methods. Not used directly.
@@ -424,18 +615,18 @@ pub struct _Type_Vtbl {
     /// Retrieves a method by name.
     ///
     /// # Arguments
-    /// 
-    /// * `*mut c_void` - Pointer to the COM object implementing the interface. 
+    ///
+    /// * `this` - Pointer to the COM object.
     /// * `name` - A `BSTR` representing the method name.
     /// * `pRetVal` - Pointer that receives the `_MethodInfo` object.
     ///
     /// # Returns
-    /// 
+    ///
     /// * Returns an HRESULT indicating success or failure.
     GetMethod_6: unsafe extern "system" fn(
-        *mut c_void, 
-        name: BSTR, 
-        pRetVal: *mut *mut _MethodInfo
+        this: *mut c_void,
+        name: BSTR,
+        pRetVal: *mut *mut _MethodInfo,
     ) -> HRESULT,
 
     /// Placeholder for the methods. Not used directly.
@@ -485,11 +676,11 @@ pub struct _Type_Vtbl {
     get_HasElementType: *const c_void,
     get_IsContextful: *const c_void,
     get_IsMarshalByRef: *const c_void,
-    Equals_2: *const c_void
+    Equals_2: *const c_void,
 }
 
 /// Specifies flags that control binding and the way in which members are searched and invoked.
-/// 
+///
 /// These flags can be combined using bitwise operations to refine the scope of the invocation or search.
 /// `BindingFlags` are commonly used in .NET reflection to determine if a method or property is
 /// public, static, instance-based, and more.
@@ -567,6 +758,6 @@ impl BitOr for BindingFlags {
     /// let flags = BindingFlags::Public | BindingFlags::Instance;
     /// ```
     fn bitor(self, rhs: Self) -> Self::Output {
-        unsafe { std::mem::transmute::<u32, BindingFlags>(self as u32 | rhs as u32) }
+        unsafe { core::mem::transmute::<u32, BindingFlags>(self as u32 | rhs as u32) }
     }
 }
