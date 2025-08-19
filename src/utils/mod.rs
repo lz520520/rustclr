@@ -109,7 +109,16 @@ pub(crate) fn uuid() -> uuid::Uuid {
     let mut buf = [0u8; 16];
 
     for i in 0..4 {
-        let ticks = unsafe { core::arch::x86_64::_rdtsc() };
+        let ticks = unsafe {
+            #[cfg(target_arch = "x86")]
+            {
+                core::arch::x86::_rdtsc()
+            }
+            #[cfg(target_arch = "x86_64")]
+            {
+                core::arch::x86_64::_rdtsc()
+            }
+        };
         buf[i * 4] = ticks as u8;
         buf[i * 4 + 1] = (ticks >> 8) as u8;
         buf[i * 4 + 2] = (ticks >> 16) as u8;
