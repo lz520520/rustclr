@@ -8,11 +8,7 @@ use alloc::{
 };
 
 use obfstr::obfstr as s;
-use dinvk::{
-    NtCurrentProcess,
-    NtProtectVirtualMemory,
-    NT_SUCCESS
-};
+use dinvk::{println, NtCurrentProcess, NtProtectVirtualMemory, NT_SUCCESS};
 use windows_core::{IUnknown, Interface, PCWSTR};
 use windows_sys::Win32::{
     UI::Shell::SHCreateMemStream,
@@ -63,6 +59,9 @@ pub struct RustClr<'a> {
 
     /// Host for the CLR runtime.
     cor_runtime_host: Option<ICorRuntimeHost>,
+
+    // ICLRRuntimeHost
+    clr_runtime_host: Option<ICLRuntimeHost>,
 }
 
 impl Default for RustClr<'_> {
@@ -82,6 +81,7 @@ impl Default for RustClr<'_> {
             args: None,
             app_domain: None,
             cor_runtime_host: None,
+            clr_runtime_host: None,
         }
     }
 }
@@ -139,7 +139,7 @@ impl<'a> RustClr<'a> {
     ///
     /// ```rust,ignore
     /// use rustclr::RustClr;
-    /// 
+    ///
     /// let clr = RustClr::new("app.exe")?.runtime_version(RuntimeVersion::V4);
     /// ```
     pub fn runtime_version(mut self, version: RuntimeVersion) -> Self {
@@ -238,7 +238,8 @@ impl<'a> RustClr<'a> {
 
         // Create and register IHostControl with custom assembly and identity
         let host_control: IHostControl = RustClrControl::new(self.buffer, &self.identity_assembly).into();
-        iclr_runtime_host.SetHostControl(&host_control)?;
+        // BUG: can not set twice
+        let _ =iclr_runtime_host.SetHostControl(&host_control);
 
         // Checks if the runtime is started
         if runtime_info.IsLoadable().is_ok() && !runtime_info.is_started() {
@@ -254,6 +255,7 @@ impl<'a> RustClr<'a> {
 
         // Saves the runtime host for future use
         self.cor_runtime_host = Some(self.get_icor_runtime_host(&runtime_info)?);
+        self.clr_runtime_host = Some(iclr_runtime_host);
         Ok(())
     }
 
@@ -563,6 +565,12 @@ impl Drop for RustClr<'_> {
             // Attempt to stop the CLR runtime
             cor_runtime_host.Stop();
         }
+        // if let Some(clr_runtime_host) = &self.clr_runtime_host {
+        //     println!("clr");
+        //     // Attempt to stop the CLR runtime
+        //     clr_runtime_host.Stop();
+        //     clr_runtime_host.Release();
+        // }
     }
 }
 

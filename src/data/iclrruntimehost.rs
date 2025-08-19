@@ -33,6 +33,10 @@ impl ICLRuntimeHost {
         unsafe { (Interface::vtable(self).Stop)(Interface::as_raw(self)) }
     }
 
+    #[inline]
+    pub fn Release(&self) -> u32 {
+        unsafe { (Interface::vtable(self).base__.Release)(Interface::as_raw(self)) }
+    }
     /// Assigns a host control implementation to the CLR runtime.
     ///
     /// # Arguments
