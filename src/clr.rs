@@ -254,7 +254,7 @@ impl<'a> RustClr<'a> {
 
         // Saves the runtime host for future use
         self.cor_runtime_host = Some(self.get_icor_runtime_host(&runtime_info)?);
-        self.clr_runtime_host = Some(iclr_runtime_host);
+        // self.clr_runtime_host = Some(iclr_runtime_host);
         Ok(())
     }
 
