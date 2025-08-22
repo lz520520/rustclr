@@ -1,6 +1,6 @@
 [package]
 name = "rustclr"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 license = "MIT"
 readme = "README.md"
@@ -9,7 +9,7 @@ description = "Host CLR and run .NET binaries using Rust"
 repository = "https://github.com/joaoviictorti/rustclr"
 homepage = "https://github.com/joaoviictorti/rustclr"
 keywords = ["dotnet", "clr", "windows", "rust", "redteam"]
-categories = ["os", "api-bindings"]
+categories = ["os", "security", "api-bindings"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
