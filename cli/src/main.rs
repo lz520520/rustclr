@@ -1,10 +1,6 @@
 use std::fs;
 use clap::{Parser, ArgAction};
-use rustclr::{
-    RustClr,
-    RuntimeVersion,
-    error::ClrError, 
-};
+use rustclr::{RustClr, RuntimeVersion, error::ClrError, WinStr};
 
 /// The main command-line interface struct.
 #[derive(Parser)]
@@ -56,8 +52,8 @@ fn main() -> Result<(), ClrError> {
     // Set the string arguments for the .NET assembly if provided
     if let Some(inputs) = cli.inputs {
         // Convert Vec<String> to Vec<&str>
-        let args = inputs.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
-        clr = clr.args(args);
+        // let args = inputs.iter().map(|s| s.as_str()).collect::<Vec<String>>();
+        clr = clr.args(inputs);
     } else {
         clr = clr.args(vec![]);
     }
